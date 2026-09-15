@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chatthingy</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="authView" class="center-screen">
+    <div class="auth-card">
+      <h1>Chatthingy</h1>
+      <p class="muted">Public posts, private chats, and group chats.</p>
+      <div class="tabs">
+        <button id="loginTab" class="tab active">Log in</button>
+        <button id="signupTab" class="tab">Sign up</button>
+      </div>
+      <form id="authForm">
+        <input id="username" type="text" placeholder="Username" autocomplete="username" class="signup-only hidden">
+        <input id="email" type="email" placeholder="Email" autocomplete="email" required>
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required minlength="6">
+        <button class="primary" type="submit" id="authButton">Log in</button>
+      </form>
+      <p id="authMessage" class="message"></p>
+    </div>
+  </div>
+
+  <div id="appView" class="app hidden">
+    <header class="topbar">
+      <div class="brand">Chatthingy</div>
+      <div class="top-actions"><span id="currentUser"></span><button id="logoutButton" class="ghost">Log out</button></div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <button class="nav active" data-view="board">🌐 Public Board</button>
+        <button class="nav" data-view="chats">💬 Chats</button>
+        <button class="new-chat" id="newChatButton">＋ New chat</button>
+        <div class="sidebar-title">Your chats</div>
+        <div id="chatList" class="chat-list"></div>
+      </aside>
+
+      <section class="content">
+        <div id="boardView" class="view">
+          <div class="page-heading"><div><h2>Public Board</h2><p class="muted">Posts here are visible to everyone using the site.</p></div></div>
+          <form id="postForm" class="composer">
+            <textarea id="postText" maxlength="1000" placeholder="What do you want to post?" required></textarea>
+            <div class="composer-bottom"><span id="postCount" class="muted">0 / 1000</span><button class="primary" type="submit">Post</button></div>
+          </form>
+          <div id="posts"></div>
+        </div>
+
+        <div id="chatsView" class="view hidden">
+          <div id="emptyChat" class="empty"><div class="empty-icon">💬</div><h2>Your chats</h2><p>Choose a chat or start a new one.</p><button class="primary" id="emptyNewChat">Start a chat</button></div>
+          <div id="chatView" class="chat-panel hidden">
+            <div class="chat-header"><div><h2 id="chatTitle">Chat</h2><p id="chatSubtitle" class="muted"></p></div><button id="addMemberButton" class="ghost hidden">＋ Add people</button></div>
+            <div id="messages" class="messages"></div>
+            <form id="messageForm" class="message-form"><input id="messageText" maxlength="4000" placeholder="Write a message..." autocomplete="off" required><button class="primary" type="submit">Send</button></form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <button id="closeModal" class="close">×</button>
+      <h2 id="modalTitle">New chat</h2>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+</html>
