@@ -4,8 +4,8 @@
 // Put your Supabase Project URL and your PUBLIC anon/publishable key here.
 // Supabase Dashboard -> Project Settings -> API.
 // NEVER put a service_role/secret key in this file.
-const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL_HERE";
-const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY_HERE";
+const SUPABASE_URL = "https://ngfmenusazjrovggtovd.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nZm1lbnVzYXpqcm92Z2d0b3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0NzU0MDEsImV4cCI6MjEwNTA1MTQwMX0.kwGdYbNGNaKlgXbbIon6bfb8v99YP3SMEIahUIhAzh8";
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
