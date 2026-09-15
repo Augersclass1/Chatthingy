@@ -22,12 +22,13 @@
     const section=document.createElement('div');
     section.id='adminView'; section.className='view hidden';
     section.innerHTML=`
-      <div class="page-heading"><div><h2>Admin panel</h2><p class="muted">Manage users, posts, messages, and inspect all conversations.</p></div></div>
-      <div class="admin-tabs"><button class="primary" id="adminUsersTab">Users</button><button class="ghost" id="adminChatsTab">All chats</button></div>
-      <div id="adminUsers"></div><div id="adminChats" class="hidden"></div>`;
+      <div class="page-heading"><div><h2>Admin panel</h2><p class="muted">Manage users, public posts, messages, and inspect all conversations.</p></div></div>
+      <div class="admin-tabs"><button class="primary" id="adminUsersTab">Users</button><button class="ghost" id="adminPostsTab">Posts</button><button class="ghost" id="adminChatsTab">All chats</button></div>
+      <div id="adminUsers"></div><div id="adminPosts" class="hidden"></div><div id="adminChats" class="hidden"></div>`;
     document.querySelector('.content').appendChild(section);
-    document.getElementById('adminUsersTab').onclick=()=>{document.getElementById('adminUsers').classList.remove('hidden');document.getElementById('adminChats').classList.add('hidden');loadUsers()};
-    document.getElementById('adminChatsTab').onclick=()=>{document.getElementById('adminUsers').classList.add('hidden');document.getElementById('adminChats').classList.remove('hidden');loadAllChats()};
+    document.getElementById('adminUsersTab').onclick=()=>showAdminTab('adminUsers');
+    document.getElementById('adminPostsTab').onclick=()=>showAdminTab('adminPosts');
+    document.getElementById('adminChatsTab').onclick=()=>showAdminTab('adminChats');
     loadUsers();
   }
 
@@ -35,7 +36,13 @@
     document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.id==='adminNav'));
     ['boardView','chatsView'].forEach(id=>document.getElementById(id).classList.add('hidden'));
     document.getElementById('adminView').classList.remove('hidden');
-    loadUsers();
+    showAdminTab('adminUsers');
+  }
+  function showAdminTab(id){
+    ['adminUsers','adminPosts','adminChats'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));
+    if(id==='adminUsers')loadUsers();
+    if(id==='adminPosts')loadPosts();
+    if(id==='adminChats')loadAllChats();
   }
 
   async function loadUsers(){
@@ -52,6 +59,15 @@
   }
   window.adminToggleBlock=async(id,value)=>{const {data,error}=await db.from('profiles').select('is_banned').eq('id',id).single();if(error){alert(error.message);return}setStatus(id,value,!!data.is_banned)};
   window.adminToggleBan=async(id,value)=>{if(value&&!confirm('Ban this account? They will be unable to use Chatthingy.'))return;const {data,error}=await db.from('profiles').select('is_blocked').eq('id',id).single();if(error){alert(error.message);return}setStatus(id,!!data.is_blocked,value)};
+
+  async function loadPosts(){
+    const box=document.getElementById('adminPosts'); if(!box)return;
+    box.innerHTML='<p class="muted">Loading posts...</p>';
+    const {data,error}=await db.from('posts').select('id,body,created_at,author:profiles!posts_author_id_fkey(username)').order('created_at',{ascending:false}).limit(200);
+    if(error){box.innerHTML='<p class="error">'+esc(error.message)+'</p>';return;}
+    box.innerHTML=(data||[]).map(p=>`<div class="admin-card"><div><b>@${esc(p.author?.username||'user')}</b><div>${esc(p.body)}</div><div class="muted">${new Date(p.created_at).toLocaleString()}</div></div><button class="delete-btn" onclick="adminDeletePost('${p.id}')">Delete</button></div>`).join('')||'<div class="empty"><h3>No posts</h3></div>';
+  }
+  window.adminDeletePost=async id=>{if(!confirm('Delete this post?'))return;const{error}=await db.from('posts').delete().eq('id',id);if(error)alert(error.message);else loadPosts()};
 
   async function loadAllChats(){
     const box=document.getElementById('adminChats'); if(!box)return;
