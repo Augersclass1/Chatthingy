@@ -9,115 +9,39 @@ const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY_HERE";
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-let currentUser = null;
-let currentProfile = null;
-let currentConversation = null;
-let conversations = [];
-let messageChannel = null;
-let postsChannel = null;
-let authMode = "login";
-
-const $ = id => document.getElementById(id);
-const esc = value => String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));
-const timeAgo = date => { const s=Math.floor((Date.now()-new Date(date))/1000); if(s<60)return "just now"; if(s<3600)return Math.floor(s/60)+"m ago"; if(s<86400)return Math.floor(s/3600)+"h ago"; if(s<604800)return Math.floor(s/86400)+"d ago"; return new Date(date).toLocaleDateString(); };
-
-function showAuthMessage(text, error=false){ $("authMessage").textContent=text; $("authMessage").style.color=error?"#b34b4b":"#39734f"; }
-function setView(view){
-  document.querySelectorAll(".nav").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
-  $("boardView").classList.toggle("hidden",view!=="board");
-  $("chatsView").classList.toggle("hidden",view!=="chats");
-}
-function openModal(title, html){ $("modalTitle").textContent=title; $("modalBody").innerHTML=html; $("modal").classList.remove("hidden"); }
-function closeModal(){ $("modal").classList.add("hidden"); }
-
-async function init(){
-  if(SUPABASE_URL.includes("PASTE_YOUR") || SUPABASE_ANON_KEY.includes("PASTE_YOUR")){
-    showAuthMessage("Add your Supabase URL and anon/publishable key in app.js first.", true); return;
-  }
-  const {data:{session}} = await db.auth.getSession();
-  if(session) await startApp(session.user); else showAuth();
-  db.auth.onAuthStateChange(async (_event, session)=>{
-    if(session) await startApp(session.user); else showAuth();
-  });
-}
-
-async function startApp(user){
-  currentUser=user;
-  let {data:profile,error} = await db.from("profiles").select("id,username,display_name").eq("id",user.id).single();
-  if(error){ console.error(error); showAuthMessage("Could not load your profile. Did you run supabase.sql?",true); return; }
-  currentProfile=profile;
-  $("currentUser").textContent="@"+profile.username;
-  $("authView").classList.add("hidden"); $("appView").classList.remove("hidden");
-  await Promise.all([loadPosts(),loadConversations()]);
-  subscribePosts();
-}
-function showAuth(){ $("appView").classList.add("hidden"); $("authView").classList.remove("hidden"); }
-
-$("loginTab").onclick=()=>{authMode="login";$("loginTab").classList.add("active");$("signupTab").classList.remove("active");$("username").classList.add("hidden");$("username").required=false;$("authButton").textContent="Log in";showAuthMessage("");};
-$("signupTab").onclick=()=>{authMode="signup";$("signupTab").classList.add("active");$("loginTab").classList.remove("active");$("username").classList.remove("hidden");$("username").required=true;$("authButton").textContent="Create account";showAuthMessage("");};
-$("authForm").onsubmit=async e=>{
-  e.preventDefault(); showAuthMessage("Working...");
-  const email=$("email").value.trim(), password=$("password").value, username=$("username").value.trim().toLowerCase();
-  if(authMode==="login"){
-    const {error}=await db.auth.signInWithPassword({email,password}); if(error)showAuthMessage(error.message,true);
-  } else {
-    if(!/^[a-z0-9_]{3,24}$/.test(username)){showAuthMessage("Username must be 3–24 characters: letters, numbers, or _. ",true);return;}
-    const {error}=await db.auth.signUp({email,password,options:{data:{username,display_name:username}}});
-    if(error)showAuthMessage(error.message,true); else showAuthMessage("Account created. Check your email if confirmation is enabled.");
-  }
-};
+let currentUser=null,currentProfile=null,currentConversation=null,conversations=[],messageChannel=null,postsChannel=null,authMode="login";
+const $=id=>document.getElementById(id);
+const esc=value=>String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));
+const timeAgo=date=>{const s=Math.floor((Date.now()-new Date(date))/1000);if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";if(s<604800)return Math.floor(s/86400)+"d ago";return new Date(date).toLocaleDateString()};
+function showAuthMessage(text,error=false){$("authMessage").textContent=text;$("authMessage").style.color=error?"#b34b4b":"#39734f"}
+function setView(view){document.querySelectorAll(".nav").forEach(b=>b.classList.toggle("active",b.dataset.view===view));$("boardView").classList.toggle("hidden",view!=="board");$("chatsView").classList.toggle("hidden",view!=="chats")}
+function openModal(title,html){$("modalTitle").textContent=title;$("modalBody").innerHTML=html;$("modal").classList.remove("hidden")}
+function closeModal(){$("modal").classList.add("hidden")}
+async function init(){if(SUPABASE_URL.includes("PASTE_YOUR")||SUPABASE_ANON_KEY.includes("PASTE_YOUR")){showAuthMessage("Add your Supabase URL and anon/publishable key in app.js first.",true);return}const{data:{session}}=await db.auth.getSession();if(session)await startApp(session.user);else showAuth();db.auth.onAuthStateChange(async(_event,session)=>{if(session)await startApp(session.user);else showAuth()})}
+async function startApp(user){currentUser=user;const{data:profile,error}=await db.from("profiles").select("id,username,display_name").eq("id",user.id).single();if(error){console.error(error);showAuthMessage("Could not load your profile. Did you run supabase.sql?",true);return}currentProfile=profile;$("currentUser").textContent="@"+profile.username;$("authView").classList.add("hidden");$("appView").classList.remove("hidden");await Promise.all([loadPosts(),loadConversations()]);subscribePosts()}
+function showAuth(){$("appView").classList.add("hidden");$("authView").classList.remove("hidden")}
+$("loginTab").onclick=()=>{authMode="login";$("loginTab").classList.add("active");$("signupTab").classList.remove("active");$("username").classList.add("hidden");$("username").required=false;$("authButton").textContent="Log in";showAuthMessage("")};
+$("signupTab").onclick=()=>{authMode="signup";$("signupTab").classList.add("active");$("loginTab").classList.remove("active");$("username").classList.remove("hidden");$("username").required=true;$("authButton").textContent="Create account";showAuthMessage("")};
+$("authForm").onsubmit=async e=>{e.preventDefault();showAuthMessage("Working...");const email=$("email").value.trim(),password=$("password").value,username=$("username").value.trim().toLowerCase();if(authMode==="login"){const{error}=await db.auth.signInWithPassword({email,password});if(error)showAuthMessage(error.message,true)}else{if(!/^[a-z0-9_]{3,24}$/.test(username)){showAuthMessage("Username must be 3–24 characters: letters, numbers, or _.",true);return}const{error}=await db.auth.signUp({email,password,options:{data:{username,display_name:username}}});if(error)showAuthMessage(error.message,true);else showAuthMessage("Account created. Check your email if confirmation is enabled.")}};
 $("logoutButton").onclick=()=>db.auth.signOut();
-
-// ---------- Public board ----------
-async function loadPosts(){
-  const {data,error}=await db.from("posts").select("id,body,created_at,author:profiles!posts_author_id_fkey(id,username,display_name)").order("created_at",{ascending:false}).limit(100);
-  if(error){console.error(error);return;} renderPosts(data||[]);
-}
-function renderPosts(posts){
-  $("posts").innerHTML=posts.length?posts.map(p=>`<article class="post" data-id="${p.id}"><div class="post-top"><div class="post-user">@${esc(p.author?.username||"unknown")}</div><div class="post-date">${timeAgo(p.created_at)}</div></div><div class="post-body">${esc(p.body)}</div>${p.author?.id===currentUser?.id?`<div class="post-actions"><button class="delete-btn" onclick="deletePost('${p.id}')">Delete</button></div>`:""}</article>`).join(""):"<div class='empty'><h3>No posts yet</h3><p>Be the first person to post.</p></div>";
-}
-window.deletePost=async id=>{if(!confirm("Delete this post?"))return;const {error}=await db.from("posts").delete().eq("id",id);if(error)alert(error.message);else loadPosts();};
+async function loadPosts(){const{data,error}=await db.from("posts").select("id,body,created_at,author:profiles!posts_author_id_fkey(id,username,display_name)").order("created_at",{ascending:false}).limit(100);if(error){console.error(error);return}renderPosts(data||[])}
+function renderPosts(posts){$("posts").innerHTML=posts.length?posts.map(p=>`<article class="post"><div class="post-top"><div class="post-user">@${esc(p.author?.username||"unknown")}</div><div class="post-date">${timeAgo(p.created_at)}</div></div><div class="post-body">${esc(p.body)}</div>${p.author?.id===currentUser?.id?`<div class="post-actions"><button class="delete-btn" onclick="deletePost('${p.id}')">Delete</button></div>`:""}</article>`).join(""):"<div class='empty'><h3>No posts yet</h3><p>Be the first person to post.</p></div>"}
+window.deletePost=async id=>{if(!confirm("Delete this post?"))return;const{error}=await db.from("posts").delete().eq("id",id);if(error)alert(error.message);else loadPosts()};
 $("postText").oninput=()=>$("postCount").textContent=$("postText").value.length+" / 1000";
-$("postForm").onsubmit=async e=>{e.preventDefault();const body=$("postText").value.trim();if(!body)return;const {error}=await db.from("posts").insert({body,author_id:currentUser.id});if(error)alert(error.message);else{$("postText").value="";$("postCount").textContent="0 / 1000";await loadPosts();}};
-function subscribePosts(){if(postsChannel)db.removeChannel(postsChannel);postsChannel=db.channel("public-posts").on("postgres_changes",{event:"*",schema:"public",table:"posts"},()=>loadPosts()).subscribe();}
-
-// ---------- Chats ----------
-async function loadConversations(){
-  const {data,error}=await db.from("conversation_members").select("conversation_id,conversations(id,name,is_group,created_at)").eq("user_id",currentUser.id);
-  if(error){console.error(error);return;}
-  conversations=(data||[]).map(x=>x.conversations).filter(Boolean);
-  for(const c of conversations){
-    const {data:members}=await db.from("conversation_members").select("user_id,profiles(username,display_name)").eq("conversation_id",c.id);
-    c.members=members||[];
-  }
-  renderChatList();
-}
-function chatName(c){if(c.is_group)return c.name||"Group chat";const other=c.members?.find(m=>m.user_id!==currentUser.id);return other?.profiles?.display_name||other?.profiles?.username||"Private chat";}
-function renderChatList(){ $("chatList").innerHTML=conversations.map(c=>`<button class="chat-item ${currentConversation?.id===c.id?"selected":""}" onclick="openChat('${c.id}')"><div class="chat-name">${esc(chatName(c))}</div><div class="chat-preview">${c.is_group?c.members.length+" members":"Private chat"}</div></button>`).join(""); }
-window.openChat=async id=>{currentConversation=conversations.find(c=>c.id===id);if(!currentConversation)return;setView("chats");$("emptyChat").classList.add("hidden");$("chatView").classList.remove("hidden");$("chatTitle").textContent=chatName(currentConversation);$("chatSubtitle").textContent=currentConversation.is_group?currentConversation.members.map(m=>"@"+m.profiles.username).join(", "):"Private conversation";$("addMemberButton").classList.toggle("hidden",!currentConversation.is_group);renderChatList();await loadMessages();subscribeMessages();};
-async function loadMessages(){const {data,error}=await db.from("messages").select("id,body,created_at,user_id,profiles(username,display_name)").eq("conversation_id",currentConversation.id).order("created_at",{ascending:true}).limit(300);if(error){console.error(error);return;}renderMessages(data||[]);}
-function renderMessages(messages){$("messages").innerHTML=messages.map(m=>`<div class="bubble ${m.user_id===currentUser.id?"mine":""}"><div class="bubble-name">@${esc(m.profiles?.username||"user")}</div><div class="bubble-text">${esc(m.body)}</div><div class="bubble-time">${timeAgo(m.created_at)}</div></div>`).join("");$("messages").scrollTop=$("messages").scrollHeight;}
-function subscribeMessages(){if(messageChannel)db.removeChannel(messageChannel);messageChannel=db.channel("messages-"+currentConversation.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:`conversation_id=eq.${currentConversation.id}`},()=>loadMessages()).subscribe();}
-$("messageForm").onsubmit=async e=>{e.preventDefault();const body=$("messageText").value.trim();if(!body||!currentConversation)return;const {error}=await db.from("messages").insert({conversation_id:currentConversation.id,user_id:currentUser.id,body});if(error)alert(error.message);else{$("messageText").value="";await loadMessages();}};
-
-async function userSearchBox(onSelect, groupMode=false){
-  openModal(groupMode?"Add people":"New private chat",`<p class="muted">Search for a username.</p><input id="userSearch" placeholder="username" autocomplete="off"><div id="userResults"></div>`);
-  const input=$("userSearch");
-  input.oninput=async()=>{const q=input.value.trim().toLowerCase();if(q.length<2){$("userResults").innerHTML="";return;}const {data}=await db.from("profiles").select("id,username,display_name").ilike("username",`%${q}%`).neq("id",currentUser.id).limit(10);$("userResults").innerHTML=(data||[]).map(u=>`<button class="user-result" data-id="${u.id}"><b>@${esc(u.username)}</b><br><span class="muted">${esc(u.display_name||"")}</span></button>`).join("");document.querySelectorAll(".user-result").forEach(b=>b.onclick=()=>onSelect(b.dataset.id));};
-}
-$("newChatButton").onclick=()=>newPrivateChat();$("emptyNewChat").onclick=()=>newPrivateChat();
-async function newPrivateChat(){await userSearchBox(async otherId=>{const {data,error}=await db.rpc("create_private_conversation",{other_user_id:otherId});if(error){alert(error.message);return;}closeModal();await loadConversations();await openChat(data);});}
-$("addMemberButton").onclick=async()=>{if(!currentConversation)return;await userSearchBox(async id=>{const {error}=await db.from("conversation_members").insert({conversation_id:currentConversation.id,user_id:id});if(error)alert(error.message);else{closeModal();await loadConversations();await openChat(currentConversation.id);}} ,true);};
-
-// Group chat creation from a comma-separated username list.
-window.createGroup=async()=>{};
-function groupModal(){openModal("New group chat",`<input id="groupName" placeholder="Group name"><input id="groupUsers" placeholder="Usernames, separated by commas"><div class="modal-actions"><button class="primary" id="createGroupBtn">Create group</button></div>`);$("createGroupBtn").onclick=async()=>{const name=$("groupName").value.trim()||"Group chat";const names=$("groupUsers").value.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);const {data:users}=await db.from("profiles").select("id,username").in("username",names);if(!users?.length){alert("No matching users found.");return;}const {data:c,error}=await db.from("conversations").insert({name,is_group:true}).select("id").single();if(error){alert(error.message);return;}const members=[{conversation_id:c.id,user_id:currentUser.id},...users.filter(u=>u.id!==currentUser.id).map(u=>({conversation_id:c.id,user_id:u.id}))];const {error:me}=await db.from("conversation_members").insert(members);if(me){alert(me.message);return;}closeModal();await loadConversations();await openChat(c.id);};}
-
-// Right-click/new chat is private by default. A group can be created from this helper if you call groupModal().
-// Expose it for an easy future button: window.groupModal().
+$("postForm").onsubmit=async e=>{e.preventDefault();const body=$("postText").value.trim();if(!body)return;const{error}=await db.from("posts").insert({body,author_id:currentUser.id});if(error)alert(error.message);else{$("postText").value="";$("postCount").textContent="0 / 1000";await loadPosts()}};
+function subscribePosts(){if(postsChannel)db.removeChannel(postsChannel);postsChannel=db.channel("public-posts").on("postgres_changes",{event:"*",schema:"public",table:"posts"},()=>loadPosts()).subscribe()}
+async function loadConversations(){const{data,error}=await db.from("conversation_members").select("conversation_id,conversations(id,name,is_group,created_at)").eq("user_id",currentUser.id);if(error){console.error(error);return}conversations=(data||[]).map(x=>x.conversations).filter(Boolean);for(const c of conversations){const{data:members}=await db.from("conversation_members").select("user_id,profiles(username,display_name)").eq("conversation_id",c.id);c.members=members||[]}renderChatList()}
+function chatName(c){if(c.is_group)return c.name||"Group chat";const other=c.members?.find(m=>m.user_id!==currentUser.id);return other?.profiles?.display_name||other?.profiles?.username||"Private chat"}
+function renderChatList(){$("chatList").innerHTML=conversations.map(c=>`<button class="chat-item ${currentConversation?.id===c.id?"selected":""}" onclick="openChat('${c.id}')"><div class="chat-name">${esc(chatName(c))}</div><div class="chat-preview">${c.is_group?c.members.length+" members":"Private chat"}</div></button>`).join("")}
+window.openChat=async id=>{currentConversation=conversations.find(c=>c.id===id);if(!currentConversation)return;setView("chats");$("emptyChat").classList.add("hidden");$("chatView").classList.remove("hidden");$("chatTitle").textContent=chatName(currentConversation);$("chatSubtitle").textContent=currentConversation.is_group?currentConversation.members.map(m=>"@"+m.profiles.username).join(", "):"Private conversation";$("addMemberButton").classList.toggle("hidden",!currentConversation.is_group);renderChatList();await loadMessages();subscribeMessages()};
+async function loadMessages(){const{data,error}=await db.from("messages").select("id,body,created_at,user_id,profiles(username,display_name)").eq("conversation_id",currentConversation.id).order("created_at",{ascending:true}).limit(300);if(error){console.error(error);return}renderMessages(data||[])}
+function renderMessages(messages){$("messages").innerHTML=messages.map(m=>`<div class="bubble ${m.user_id===currentUser.id?"mine":""}"><div class="bubble-name">@${esc(m.profiles?.username||"user")}</div><div class="bubble-text">${esc(m.body)}</div><div class="bubble-time">${timeAgo(m.created_at)}</div></div>`).join("");$("messages").scrollTop=$("messages").scrollHeight}
+function subscribeMessages(){if(messageChannel)db.removeChannel(messageChannel);messageChannel=db.channel("messages-"+currentConversation.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:`conversation_id=eq.${currentConversation.id}`},()=>loadMessages()).subscribe()}
+$("messageForm").onsubmit=async e=>{e.preventDefault();const body=$("messageText").value.trim();if(!body||!currentConversation)return;const{error}=await db.from("messages").insert({conversation_id:currentConversation.id,user_id:currentUser.id,body});if(error)alert(error.message);else{$("messageText").value="";await loadMessages()}};
+async function userSearchBox(onSelect,groupMode=false){openModal(groupMode?"Add people":"New private chat",`<p class="muted">Search for a username.</p><input id="userSearch" placeholder="username" autocomplete="off"><div id="userResults"></div>`);const input=$("userSearch");input.oninput=async()=>{const q=input.value.trim().toLowerCase();if(q.length<2){$("userResults").innerHTML="";return}const{data}=await db.from("profiles").select("id,username,display_name").ilike("username",`%${q}%`).neq("id",currentUser.id).limit(10);$("userResults").innerHTML=(data||[]).map(u=>`<button class="user-result" data-id="${u.id}"><b>@${esc(u.username)}</b><br><span class="muted">${esc(u.display_name||"")}</span></button>`).join("");document.querySelectorAll(".user-result").forEach(b=>b.onclick=()=>onSelect(b.dataset.id))}}
+$("newChatButton").onclick=()=>newPrivateChat();$("emptyNewChat").onclick=()=>newPrivateChat();$("newGroupButton").onclick=()=>groupModal();
+async function newPrivateChat(){await userSearchBox(async otherId=>{const{data,error}=await db.rpc("create_private_conversation",{other_user_id:otherId});if(error){alert(error.message);return}closeModal();await loadConversations();await openChat(data)})}
+$("addMemberButton").onclick=async()=>{if(!currentConversation)return;await userSearchBox(async id=>{const{error}=await db.from("conversation_members").insert({conversation_id:currentConversation.id,user_id:id});if(error)alert(error.message);else{closeModal();await loadConversations();await openChat(currentConversation.id)}},true)};
+function groupModal(){openModal("New group chat",`<p class="muted">Enter usernames separated by commas.</p><input id="groupName" placeholder="Group name"><input id="groupUsers" placeholder="alice, bob, charlie"><div class="modal-actions"><button class="primary" id="createGroupBtn">Create group</button></div>`);$("createGroupBtn").onclick=async()=>{const name=$("groupName").value.trim()||"Group chat";const names=$("groupUsers").value.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);if(!names.length){alert("Enter at least one username.");return}const{data:users,error:ue}=await db.from("profiles").select("id,username").in("username",names);if(ue){alert(ue.message);return}if(!users?.length){alert("No matching users found.");return}const{data:c,error}=await db.from("conversations").insert({name,is_group:true}).select("id").single();if(error){alert(error.message);return}const members=[{conversation_id:c.id,user_id:currentUser.id},...users.filter(u=>u.id!==currentUser.id).map(u=>({conversation_id:c.id,user_id:u.id}))];const{error:me}=await db.from("conversation_members").insert(members);if(me){await db.from("conversations").delete().eq("id",c.id);alert(me.message);return}closeModal();await loadConversations();await openChat(c.id)}}
 window.groupModal=groupModal;
-
-document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>setView(b.dataset.view));
-$("closeModal").onclick=closeModal;$("modal").onclick=e=>{if(e.target===$("modal"))closeModal();};
-init();
+document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>setView(b.dataset.view));$("closeModal").onclick=closeModal;$("modal").onclick=e=>{if(e.target===$("modal"))closeModal()};init();
