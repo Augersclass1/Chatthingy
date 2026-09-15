@@ -168,10 +168,11 @@ alter table public.messages enable row level security;
 -- Profiles are searchable by signed-in users so private/group chat creation works.
 drop policy if exists "profiles readable by signed in users" on public.profiles;
 create policy "profiles readable by signed in users" on public.profiles for select to authenticated using (true);
+-- There is deliberately NO client UPDATE policy on profiles. This prevents users from promoting themselves to admin.
 drop policy if exists "users can update own profile" on public.profiles;
-create policy "users can update own profile" on public.profiles for update to authenticated using (id=auth.uid()) with check (id=auth.uid());
 drop policy if exists "admins can update profiles" on public.profiles;
-create policy "admins can update profiles" on public.profiles for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+revoke insert,update,delete on public.profiles from anon,authenticated;
+grant select on public.profiles to authenticated;
 
 -- Public posts: admins can moderate everything; restricted users cannot create posts.
 drop policy if exists "signed in users can read posts" on public.posts;
@@ -226,7 +227,7 @@ end $$;
 -- the signup trigger above will automatically make a future @felix account admin.
 update public.profiles set is_admin=true where lower(username)='felix';
 
--- Browser grants.
+-- Browser grants for the application tables.
 grant select on public.profiles,public.posts,public.conversations,public.conversation_members,public.messages to authenticated;
 grant insert,update,delete on public.posts to authenticated;
 grant insert,update on public.conversations to authenticated;
