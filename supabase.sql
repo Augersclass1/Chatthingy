@@ -40,7 +40,6 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
--- Admin/moderation flags. Only @felix is made admin below.
 alter table public.profiles add column if not exists is_admin boolean not null default false;
 alter table public.profiles add column if not exists is_blocked boolean not null default false;
 alter table public.profiles add column if not exists is_banned boolean not null default false;
@@ -49,7 +48,6 @@ create index if not exists posts_created_at_idx on public.posts(created_at desc)
 create index if not exists messages_conversation_created_idx on public.messages(conversation_id,created_at);
 create index if not exists members_user_idx on public.conversation_members(user_id);
 
--- Automatically make a profile when someone signs up.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -78,7 +76,6 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
--- Admin helper. SECURITY DEFINER avoids recursive RLS checks on profiles.
 create or replace function public.is_admin(uid uuid default auth.uid())
 returns boolean
 language sql
@@ -91,7 +88,6 @@ $$;
 
 grant execute on function public.is_admin(uuid) to authenticated;
 
--- Helper avoids recursive RLS policies on conversation_members.
 create or replace function public.is_conversation_member(cid uuid, uid uuid default auth.uid())
 returns boolean
 language sql
@@ -104,7 +100,6 @@ $$;
 
 grant execute on function public.is_conversation_member(uuid,uuid) to authenticated;
 
--- Create a private conversation atomically.
 create or replace function public.create_private_conversation(other_user_id uuid)
 returns uuid
 language plpgsql
@@ -140,7 +135,6 @@ $$;
 
 grant execute on function public.create_private_conversation(uuid) to authenticated;
 
--- Admin-only moderation action.
 create or replace function public.admin_set_user_status(target_user_id uuid, blocked boolean, banned boolean)
 returns boolean
 language plpgsql
@@ -165,16 +159,15 @@ alter table public.conversations enable row level security;
 alter table public.conversation_members enable row level security;
 alter table public.messages enable row level security;
 
--- Profiles are searchable by signed-in users so private/group chat creation works.
+-- Profiles are searchable by signed-in users.
 drop policy if exists "profiles readable by signed in users" on public.profiles;
 create policy "profiles readable by signed in users" on public.profiles for select to authenticated using (true);
--- There is deliberately NO client UPDATE policy on profiles. This prevents users from promoting themselves to admin.
 drop policy if exists "users can update own profile" on public.profiles;
 drop policy if exists "admins can update profiles" on public.profiles;
 revoke insert,update,delete on public.profiles from anon,authenticated;
 grant select on public.profiles to authenticated;
 
--- Public posts: admins can moderate everything; restricted users cannot create posts.
+-- Public posts.
 drop policy if exists "signed in users can read posts" on public.posts;
 create policy "signed in users can read posts" on public.posts for select to authenticated using ((select public.is_admin()) or not exists(select 1 from public.profiles p where p.id=auth.uid() and p.is_banned));
 drop policy if exists "users can create own posts" on public.posts;
@@ -186,7 +179,7 @@ create policy "admins can delete any posts" on public.posts for delete to authen
 drop policy if exists "users can update own posts" on public.posts;
 create policy "users can update own posts" on public.posts for update to authenticated using (author_id=auth.uid()) with check (author_id=auth.uid());
 
--- Conversations: normal users see only their chats; admins see every chat.
+-- Conversations: users can read only their own chats; admins can read all.
 drop policy if exists "members can read conversations" on public.conversations;
 create policy "members can read conversations" on public.conversations for select to authenticated using ((select public.is_admin()) or (public.is_conversation_member(id) and not exists(select 1 from public.profiles p where p.id=auth.uid() and p.is_banned)));
 drop policy if exists "signed in users can create conversations" on public.conversations;
@@ -194,15 +187,27 @@ create policy "signed in users can create conversations" on public.conversations
 drop policy if exists "members can update group conversations" on public.conversations;
 create policy "members can update group conversations" on public.conversations for update to authenticated using ((select public.is_admin()) or public.is_conversation_member(id)) with check ((select public.is_admin()) or public.is_conversation_member(id));
 
--- Membership records: admins can inspect all; normal users stay within their own chats.
+-- Membership records. The important change here is that membership insertion
+-- no longer recursively evaluates itself through the RLS policy. A user may
+-- add themselves to a newly-created conversation, and an existing member may
+-- add another user to that conversation.
 drop policy if exists "members can read memberships" on public.conversation_members;
 create policy "members can read memberships" on public.conversation_members for select to authenticated using ((select public.is_admin()) or public.is_conversation_member(conversation_id));
 drop policy if exists "users can join conversations" on public.conversation_members;
-create policy "users can join conversations" on public.conversation_members for insert to authenticated with check ((select public.is_admin()) or ((user_id=auth.uid() or public.is_conversation_member(conversation_id)) and not exists(select 1 from public.profiles p where p.id=auth.uid() and (p.is_banned or p.is_blocked))));
+create policy "users can join conversations" on public.conversation_members for insert to authenticated with check (
+  (select public.is_admin())
+  or (
+    not exists(select 1 from public.profiles p where p.id=auth.uid() and (p.is_banned or p.is_blocked))
+    and (
+      user_id=auth.uid()
+      or public.is_conversation_member(conversation_id,auth.uid())
+    )
+  )
+);
 drop policy if exists "users can leave conversations" on public.conversation_members;
-create policy "users can leave conversations" on public.conversation_members for delete to authenticated using ((select public.is_admin()) or user_id=auth.uid() or public.is_conversation_member(conversation_id));
+create policy "users can leave conversations" on public.conversation_members for delete to authenticated using ((select public.is_admin()) or user_id=auth.uid());
 
--- Messages: admins can inspect/delete everything; normal users see only their conversations.
+-- Messages.
 drop policy if exists "members can read messages" on public.messages;
 create policy "members can read messages" on public.messages for select to authenticated using ((select public.is_admin()) or (public.is_conversation_member(conversation_id) and not exists(select 1 from public.profiles p where p.id=auth.uid() and p.is_banned)));
 drop policy if exists "members can send messages" on public.messages;
@@ -212,7 +217,6 @@ create policy "users can delete own messages" on public.messages for delete to a
 drop policy if exists "admins can delete any messages" on public.messages;
 create policy "admins can delete any messages" on public.messages for delete to authenticated using ((select public.is_admin()));
 
--- Enable realtime for posts and messages. Safe to run repeatedly.
 do $$
 begin
   if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='posts') then
@@ -223,11 +227,8 @@ begin
   end if;
 end $$;
 
--- Make the existing @felix account the admin now. If @felix does not exist yet,
--- the signup trigger above will automatically make a future @felix account admin.
 update public.profiles set is_admin=true where lower(username)='felix';
 
--- Browser grants for the application tables.
 grant select on public.profiles,public.posts,public.conversations,public.conversation_members,public.messages to authenticated;
 grant insert,update,delete on public.posts to authenticated;
 grant insert,update on public.conversations to authenticated;
